@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.core import numerictypes as nt
 
-def meandian(x, alpha=1.5):
+def meandian(x, alpha=1.5, max_iter=100, tol=1e-10):
     # make sure the input is an array
     x = np.asarray(x)
     # if the exponent is a single value, return a singlevalue
@@ -19,12 +19,12 @@ def meandian(x, alpha=1.5):
         meandian_values[alpha < 1] = brute_meandian2(x, alpha[alpha < 1])
 
     if np.sum(alpha >= 1):
-        meandian_values[alpha >= 1] = interval_meandian(x, alpha[alpha >= 1])
+        meandian_values[alpha >= 1] = interval_meandian(x, alpha[alpha >= 1], max_iter=max_iter, tol=tol)
 
     return meandian_values
 
 
-def interval_meandian(x, alpha=1.5):
+def interval_meandian(x, alpha=1.5, max_iter=100, tol=1e-10):
     if not isinstance(alpha, (tuple, list, np.ndarray)):
         alpha = np.array([alpha])
 
@@ -34,12 +34,12 @@ def interval_meandian(x, alpha=1.5):
 
     interval_x = np.array([[np.min(x), np.max(x)]] * len(alpha)).T
     range_n = np.arange(len(alpha), dtype=int)
-    for i in range(100):
+    for i in range(max_iter):
         new_point = np.mean(interval_x, axis=0)
         value = dp(new_point)
         index = ((value > 0).astype(np.uint8), range_n)
         interval_x[index] = new_point
-        if np.all(np.abs(interval_x[0] - interval_x[1]) < 1e-10):
+        if np.all(np.abs(interval_x[0] - interval_x[1]) < tol):
             break
     return np.mean(interval_x, axis=0)
 
