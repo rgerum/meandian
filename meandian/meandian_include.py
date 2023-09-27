@@ -23,6 +23,69 @@ def meandian(x, alpha=1.5, max_iter=100, tol=1e-10):
 
     return meandian_values
 
+def get_meandian(x, alpha=1.5, max_iter=100, tol=1e-6, axis=None):
+    single_alpha = False
+    if isinstance(alpha, (int, float)):
+        single_alpha = True
+        alpha = [alpha]
+
+    if len(x.shape) >= 2 and axis is None:
+        x = x.ravel()
+
+    if len(x.shape) >= 2:
+        y = np.transpose(x, [i for i in range(len(x.shape)) if i != axis] + [axis])
+        shape = y.shape
+        yy = np.reshape(y, (-1, y.shape[-1]))
+
+        mus = np.array([interval_meandian_jit(xx, np.asarray(alpha), max_iter, tol) for xx in yy])
+        mus = np.reshape(mus, list(shape[:-1])+[-1])
+        if single_alpha is True:
+            return mus[..., 0]
+        return mus
+    else:
+        mus = interval_meandian_jit(x, np.asarray(alpha), max_iter, tol)
+
+        if single_alpha is True:
+            return mus[0]
+        return mus
+
+from numba import njit
+@njit
+def interval_meandian_jit(x, alpha=1.5, max_iter=100, tol=1e-6):
+    results = []
+
+    for a in alpha:
+        if np.isinf(a):
+            results.append((np.max(x)+np.min(x))/2)
+        elif a < 1:
+            def d(x, mu, n, axis=0):
+                x = x[:, None]
+                mu = mu[None, :]
+                return np.sum((np.abs(x - mu)) ** n, axis=axis)
+
+            v = d(x, x, a)
+            i = np.argmin(v, axis=0)
+            results.append(x[i])
+        elif i == 1:
+            results.append(np.median(x))
+        else:
+            def dp(mu):
+                a_mu = x - mu
+                return np.sum(-np.abs(a_mu) ** (a - 1) * np.sign(a_mu))
+
+            interval_x = [np.min(x), np.max(x)]
+            for i in range(max_iter):
+                new_point = (interval_x[0] + interval_x[1]) / 2
+                value = dp(new_point)
+                if value > 0:
+                    interval_x[1] = new_point
+                else:
+                    interval_x[0] = new_point
+                if np.abs(interval_x[0] - interval_x[1]) < tol:
+                    break
+            results.append((interval_x[0] + interval_x[1]) / 2)
+
+    return np.array(results)
 
 def interval_meandian(x, alpha=1.5, max_iter=100, tol=1e-10):
     if not isinstance(alpha, (tuple, list, np.ndarray)):
