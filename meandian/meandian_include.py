@@ -74,7 +74,7 @@ def interval_meandian_jit(x, alpha=1.5, max_iter=100, tol=1e-6):
             v = d(x, x, a)
             i = np.argmin(v, axis=0)
             results.append(x[i])
-        elif i == 1:
+        elif a == 1:
             results.append(np.median(x))
         else:
 
@@ -129,3 +129,123 @@ def brute_meandian2(x, alpha=1.5):
     v = d(x, x, alpha)
     i = np.argmin(v, axis=0)
     return x[i]
+
+
+from mpmath import *
+
+mp.dps = 50
+
+# print(mpf(2) ** mpf("0.5"))
+
+
+def optimize(x, alphas):
+    x = np.sort(x)
+    meandians = get_meandian(x, alphas)
+    y = np.random.normal(size=len(x))
+    losses = np.abs(get_meandian(y, alphas) - meandians)
+    loss = np.sum(losses)
+    list_meandians = []
+    list_y = []
+    list_lr = []
+    lr = 0.01
+    count = 0
+    for i in range(1000_000):
+        dy = np.random.normal(size=len(x)) * lr
+        y2 = y + dy
+
+        meandians2 = get_meandian(y2, alphas)
+        losses2 = np.abs(meandians2 - meandians)
+        loss2 = np.sum(losses2)
+        if np.sum(loss2) < loss * 1.01 and np.sum(losses2 < losses) > 3:
+            y2 = np.sort(y2)
+            y = y2
+            loss = np.sum(loss2)
+            list_meandians.append(meandians2)
+            list_y.append(y)
+            list_lr.append(lr)
+        else:
+            count += 1
+            if count > 100:
+                lr *= 0.999
+                count = 0
+
+    list_y = np.array(list_y)
+    list_meandians = np.array(list_meandians)
+
+    def plot_both(target, values):
+        for i in range(len(target)):
+            (l,) = plt.plot(values[:, i])
+            plt.axhline(target[i], color=l.get_color(), lw=0.8)
+
+    plt.subplot(121)
+    plot_both(meandians, list_meandians)
+    plt.plot(list_lr)
+    plt.subplot(122)
+    plot_both(x, list_y)
+
+    plt.show()
+
+
+import matplotlib.pyplot as plt
+
+np.random.seed(123)
+x = np.random.normal(size=7)
+alphas = np.array([0.5, 1, 1.3, 1.5, 1.8, 2, 2.5, 3, 5, np.inf])
+# alphas = np.array([0.5])
+optimize(x, alphas)
+
+med0 = get_meandian(x, alphas)
+off = []
+dxs = []
+for i in range(10000):
+    dx = np.random.normal(size=len(x)) * 1e-2
+    med = get_meandian(x + dx, alphas)
+    off.append(np.sum(np.abs(med - med0)))
+    dxs.append(np.sum(np.abs(dx)))
+print(np.mean(off))
+
+
+# plt.hist(off, 20)
+plt.plot(off, dxs, "o", alpha=0.1)
+plt.xlabel("meandian error")
+plt.ylabel("data error")
+plt.show()
+
+
+def interval_meandian_mpmath(x, alpha=1.5, max_iter=100, tol=1e-6):
+    results = []
+
+    for a in alpha:
+        if np.isinf(a):
+            results.append((np.max(x) + np.min(x)) / 2)
+        elif a < 1:
+
+            def d(x, mu, n, axis=0):
+                x = x[:, None]
+                mu = mu[None, :]
+                return np.sum((np.abs(x - mu)) ** n, axis=axis)
+
+            v = d(x, x, a)
+            i = np.argmin(v, axis=0)
+            results.append(x[i])
+        elif i == 1:
+            results.append(np.median(x))
+        else:
+
+            def dp(mu):
+                a_mu = x - mu
+                return np.sum(-np.abs(a_mu) ** (a - 1) * np.sign(a_mu))
+
+            interval_x = [np.min(x), np.max(x)]
+            for i in range(max_iter):
+                new_point = (interval_x[0] + interval_x[1]) / 2
+                value = dp(new_point)
+                if value > 0:
+                    interval_x[1] = new_point
+                else:
+                    interval_x[0] = new_point
+                if np.abs(interval_x[0] - interval_x[1]) < tol:
+                    break
+            results.append((interval_x[0] + interval_x[1]) / 2)
+
+    return np.array(results)
